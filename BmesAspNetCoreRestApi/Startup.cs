@@ -1,6 +1,16 @@
+using BmesAspNetCoreRestApi.Database;
+using BmesAspNetCoreRestApi.Infrastructure;
+using BmesAspNetCoreRestApi.Models.Shared;
+using BmesAspNetCoreRestApi.Repositories;
+using BmesAspNetCoreRestApi.Repositories.Implementation;
+using BmesAspNetCoreRestApi.Services;
+using BmesAspNetCoreRestApi.Services.Implementations;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -26,11 +36,64 @@ namespace BmesAspNetCoreRestApi
         public void ConfigureServices(IServiceCollection services)
         {
 
+            services.AddMemoryCache();
+
+            services.AddSession();
+
+            services.AddDistributedMemoryCache();
+
             services.AddControllers();
             services.AddSwaggerGen(c =>
             {
                 c.SwaggerDoc("v1", new OpenApiInfo { Title = "BmesAspNetCoreRestApi", Version = "v1" });
+                c.AddSecurityDefinition("Bearer",
+                   new OpenApiSecurityScheme
+                   {
+                       Description = "JWT Authorization header using the Bearer scheme.",
+                       Type = SecuritySchemeType.Http,
+                       Scheme = "bearer"
+                   });
+
+                c.AddSecurityRequirement(new OpenApiSecurityRequirement{
+                    {
+                        new OpenApiSecurityScheme{
+                            Reference = new OpenApiReference{
+                                Id = "Bearer",
+                                Type = ReferenceType.SecurityScheme
+                            }
+                        },
+                        new List<string>()
+                    }
+                });
             });
+            
+            services.AddDbContext<BmesDbContext>(options => options.UseSqlite(Configuration["Data:BmesApi:ConnectionString"]));
+            services.AddDbContext<BmesIdentityDbContext>(options =>
+                options.UseSqlite(
+                    Configuration["Data:BmesIdentity:ConnectionString"]));
+
+            services.AddIdentity<User, IdentityRole>()
+               .AddEntityFrameworkStores<BmesIdentityDbContext>();
+
+            //Extension method that configured JWT
+            services.AddJwtAuth(Configuration);
+
+            services.AddTransient<IBrandRepository, BrandRepository>();
+            services.AddTransient<ICategoryRepository, CategoryRepository>();
+            services.AddTransient<IProductRepository, ProductRepository>();
+
+
+            services.AddTransient<IBrandService, BrandService>();
+            services.AddTransient<ICategoryService, CategoryService>();
+            services.AddTransient<IProductService, ProductService>();
+            services.AddTransient<ICatalogueService, CatalogueService>();
+
+            services.AddTransient<IAuthRepository, AuthRepository>();
+            services.AddTransient<IAuthService, AuthService>();
+
+            services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+
+
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -42,8 +105,11 @@ namespace BmesAspNetCoreRestApi
                 app.UseSwagger();
                 app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "BmesAspNetCoreRestApi v1"));
             }
-
+            app.UseSwagger();
+            app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "BmesAspNetCoreRestApi v1"));
+            app.UseSession();
             app.UseRouting();
+            app.UseAuthentication();
 
             app.UseAuthorization();
 
@@ -51,6 +117,18 @@ namespace BmesAspNetCoreRestApi
             {
                 endpoints.MapControllers();
             });
+
+            // Create a service scope to get an BmesIdentityDbContext instance using DI
+            using (var serviceScope = app.ApplicationServices.GetRequiredService<IServiceScopeFactory>().CreateScope())
+            {
+                var dbContext = serviceScope.ServiceProvider.GetService<BmesIdentityDbContext>();
+                var roleManager = serviceScope.ServiceProvider.GetService<RoleManager<IdentityRole>>();
+                var userManager = serviceScope.ServiceProvider.GetService<UserManager<User>>();
+                // Create the Db if it doesn't exist and applies any pending migration.
+                //dbContext.Database.Migrate();
+
+                IdentityDbSeeder.Seed(dbContext, roleManager, userManager);
+            }
         }
     }
 }
