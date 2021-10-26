@@ -67,9 +67,9 @@ namespace BmesAspNetCoreRestApi
                 });
             });
             
-            services.AddDbContext<BmesDbContext>(options => options.UseSqlServer(Configuration["Data:BmesApi:ConnectionString"]));
+            services.AddDbContext<BmesDbContext>(options => options.UseSqlite(Configuration["Data:BmesApi:ConnectionString"]));
             services.AddDbContext<BmesIdentityDbContext>(options =>
-                options.UseSqlServer(
+                options.UseSqlite(
                     Configuration["Data:BmesIdentity:ConnectionString"]));
 
             services.AddIdentity<User, IdentityRole>()
