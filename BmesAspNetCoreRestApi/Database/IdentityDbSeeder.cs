@@ -29,7 +29,7 @@ namespace BmesAspNetCoreRestApi.Database
             UserManager<User> userManager)
         {
 
-
+            // here are some changes
             //Create Roles (if they doesn't exist yet)
             if (!await roleManager.RoleExistsAsync(UserRole.Administrator.ToString()))
             {
