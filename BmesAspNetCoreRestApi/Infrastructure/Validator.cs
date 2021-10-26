@@ -7,5 +7,6 @@ namespace BmesAspNetCoreRestApi.Infrastructure
 {
     public class Validator
     {
+        // Hello Friends! How are you doing?
     }
 }
